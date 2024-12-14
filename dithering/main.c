@@ -128,7 +128,11 @@ void average_dithering(unsigned char *img, int w, int h, int c)
 
 
 void bayer_dither(unsigned char *img, int w, int h, int c, const int *bm, int bm_size) {
+<<<<<<< HEAD
     //greyscaler(img, w, h, c);
+=======
+    greyscaler(img, w, h, c);
+>>>>>>> 4f5a539edabb7f292cfdf1353947c35420ff6faa
 
     int i,j,k,maxV = 0;
     for (i = 0; i < bm_size * bm_size; i++) {
@@ -157,6 +161,7 @@ void bayer_dither(unsigned char *img, int w, int h, int c, const int *bm, int bm
 }
 
 
+<<<<<<< HEAD
 void quantize_pixel(unsigned char *px, int levels, int c) {
     int i;
     for (i = 0; i < c; i++) {
@@ -180,6 +185,11 @@ void quantize(unsigned char *img, int w, int h, int c, int l) {
 
 int main(void){
     int w,h,channels,t,filter,bm_choice,level;
+=======
+
+int main(void){
+    int w,h,channels,t,filter,bm_choice;
+>>>>>>> 4f5a539edabb7f292cfdf1353947c35420ff6faa
     char name[max];
 
     printf("give the name of the image (.png) : \n");
@@ -195,7 +205,11 @@ int main(void){
     printf("Now loading your image with widht of %dpx and height of %dpx and channels %d\n",w,h,channels);
    
     printf("choose the dithering effect :\n");
+<<<<<<< HEAD
     printf("1)threshold\n2)average dithering\n3) Bayer Dithering\n4) quantize\n");
+=======
+    printf("1)threshold\n2)average dithering3) Bayer Dithering\n\n");
+>>>>>>> 4f5a539edabb7f292cfdf1353947c35420ff6faa
     scanf("%d",&filter);
     switch(filter){
         case 1:
@@ -230,6 +244,7 @@ int main(void){
             }
             printf("Bayer dithering completed.\n");
             break;
+<<<<<<< HEAD
         case 4:
             do{
             printf("Choose a level to limit colors to : (level >= 2)\n");
@@ -238,6 +253,8 @@ int main(void){
             quantize(img,w,h,channels,level);
             printf("Quantizing completed.\n");
             break;
+=======
+>>>>>>> 4f5a539edabb7f292cfdf1353947c35420ff6faa
         default:
             printf("Invalid choice.\n");
             stbi_image_free(img);
