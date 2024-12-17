@@ -82,17 +82,24 @@ void threshold(unsigned char *img, int w, int h, int c, unsigned char t)
     printf("threshold completed :) \n");
 }
 
-void doubleThreshold(float *m, unsigned char *img, int w, int h, float tl, float th) {
-    for (int i = 0; i < h; i++)
-        for (int j = 0; j < w; j++) {
-            int pID = i * w + j;
+void doubleThreshold(float *m, unsigned char *img, int w, int h, int c, float tl, float th) {
+    int i,j;
 
-            if (m[pID] >= th)
-                img[pID] = 255;
-            else if (m[pID] >= tl)
-                img[pID] = 128;
+    for (i=0;i<h;i++)
+        for (j=0;j<w;j++) {
+            int pID = (i * w + j) * c;
+            int mID = i * w + j;
+            int v;
+            if (m[mID] >= th)
+                v = 255;
+            else if (m[mID] >= tl)
+                v = 128;
             else 
-                img[pID] = 0;
+                v = 0;
+
+            img[pID] = v;
+            img[pID+1] = v;
+            img[pID+2] = v;
         }
 }
 
@@ -102,10 +109,8 @@ void applyKernel(unsigned char *img, int w, int h, int c, int ks, float *kernel)
     int i,j,k,off=ks/2;
     float sum;
 
-    printf("working1..\n");
     unsigned char *nimg = (unsigned char*)malloc(w * h * c * sizeof(unsigned char));
 
-    printf("working2..\n");
     if(nimg == NULL) {
         printf("failed to allocate memory\n");
     }
@@ -132,8 +137,6 @@ void applyKernel(unsigned char *img, int w, int h, int c, int ks, float *kernel)
             }
 
     memcpy(img, nimg, w*h*c);
-
-    printf("working 3...\n");
     free(nimg);
 }
 
@@ -158,7 +161,6 @@ void boxBlur(unsigned char *img, int w, int h, int c, int tension)
     applyKernel(img,w,h,c,ks,kernel);
     free(kernel);
 
-    printf("working4..\n");
 }
 
 void genGaussian(float *kernel, int size, float sigma)
@@ -192,15 +194,12 @@ void gaussianBlur(unsigned char *img, int w, int h, int c, int tension, float st
     genGaussian(kernel,ks,strength);
     applyKernel(img,w,h,c,ks,kernel);
 
-    printf("working 4..\n");
     free(kernel);
-    printf("working 5.....\n");
 }
 
 void computeGradients(unsigned char *img, int w, int h, int c, float *m, float *d)
 {
     int i,j,k,l,gi,gj;
-    printf("working 7.1\n");
     for(i = 1; i < h - 1; i++)
         for(j = 1; j < w - 1; j++) {
             gi = 0;
@@ -221,40 +220,87 @@ void computeGradients(unsigned char *img, int w, int h, int c, float *m, float *
             m[id] = sqrt(gi * gi + gj * gj);
             d[id] = atan2(gi, gj);
         }
-    printf("working 7.2\n");
 }
 
-void hysteresis(unsigned char *img, int w, int h) {
-
-    int i,j,n,ni,nj;
+void hysteresis(unsigned char *img, int w, int h, int c) {
+    int i, j, n, ni, nj, v;
     bool isconnected;
     // Neighbor offsets for 8 neighbors
-    int neibors[8][2] = {
-        {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}
+    int neighbors[8][2] = {
+        {-1, -1}, {-1, 0}, {-1, 1},
+        { 0, -1},          { 0, 1},
+        { 1, -1}, { 1, 0}, { 1, 1}
     };
 
-    for (i = 1; i < h - 1; i++) {
+
+    for (i = 1; i < h - 1; i++) 
         for (j = 1; j < w - 1; j++) {
-            int pID = i * w + j;
+            int pID = (i * w + j) * c;
+
 
             if (img[pID] == 128) {
                 isconnected = false;
                 for (n = 0; n < 8; n++) {
-                    ni = i + neibors[n][0];
-                    nj = j + neibors[n][1];
-                    int nID = ni * w + nj;
-                    
-                    if (img[nID] == 255) {
-                        isconnected = true;
-                        break;
+                    ni = i + neighbors[n][0];
+                    nj = j + neighbors[n][1];
+                    if (ni >= 0 && ni < h && nj >= 0 && nj < w) {
+                        int nID = (ni * w + nj) * c;
+                        if (img[nID] == 255){
+                            isconnected = true;
+                            break;
+                        }
                     }
                 }
+                v = isconnected ? 255 : 0;
+                img[pID] = v;   
+                img[pID + 1] = v;
+                img[pID + 2] = v;
+                if (c > 3)
+                    img[pID + 3] = img[pID + 3];
+            }
+        }
+}
 
-                if (isconnected) {
-                    img[pID] = 255;                 
-                } else {
-                    img[pID] = 0;                 
-                }
+void nonMaxSuppression(float *magnitude, float *direction, unsigned char * nms, int w, int h, int c)
+{
+    int i,j;
+    float angle;
+    for (i = 1; i < h - 1; i++) {
+        for (j = 1; j < w - 1; j++) {
+            int mID = i * w + j;
+            int pID = (i * w + j) * c;
+
+            angle = direction[mID] * 180.0 / M_PI;
+            if (angle < 0) angle += 180;
+
+            float m = magnitude[mID];
+            float n1 = 0, n2 = 0; //neighbor 1 & 2
+
+            if ((angle >= 0 && angle < 22.5) || (angle >= 157.5 && angle <= 180)) {
+                n1 = magnitude[mID - 1];
+                n2 = magnitude[mID + 1];
+            } else if (angle >= 22.5 && angle < 67.5) {
+                n1 = magnitude[mID - w - 1];
+                n2 = magnitude[mID + w + 1];
+            } else if (angle >= 67.5 && angle < 112.5) {
+                n1 = magnitude[mID - w];
+                n2 = magnitude[mID + w];
+            } else if (angle >= 112.5 && angle < 157.5) {
+                n1 = magnitude[mID - w + 1];  
+                n2 = magnitude[mID + w - 1];
+            }
+
+
+            if (m >= n1 && m >= n2) {
+                nms[pID] = (unsigned char)m;
+                nms[pID + 1] = (unsigned char)m;
+                nms[pID + 2] = (unsigned char)m;
+                if (c > 3) nms[pID + 3] = 255;
+            } else {
+                nms[pID] = 0;
+                nms[pID + 1] = 0;
+                nms[pID + 2] = 0;
+                if (c > 3) nms[pID + 3] = 255;
             }
         }
     }
@@ -264,25 +310,35 @@ void canny(unsigned char *img, int w, int h, int c, int tension, float strength,
 {
     greyscaler(img,w,h,c);
     gaussianBlur(img,w,h,c,tension,strength);
-    printf("working6\n");
 
     float *magnitude = (float *)malloc(w * h * sizeof(float));
     float *direction = (float *)malloc(w * h * sizeof(float));
-    if (!magnitude || !direction) {
-        printf("Failed to allocate memory for gradients.\n");
+    unsigned char *nms = (unsigned char *)malloc(w * h * sizeof(unsigned char));
+    if (!magnitude || !direction || !nms) {
+        printf("Failed to allocate memory.\n");
         free(magnitude);
         free(direction);
+        free(nms);
         return;
     }
-    printf("working 7 ?\n");
+
+    printf("computing gradients..\n");
     computeGradients(img, w, h, c, magnitude, direction);
-    printf("working 8\n");
-    doubleThreshold(magnitude,img,w,h,threshold*0.5,threshold);
-    printf("working 9\n");
-    hysteresis(img,w,h);
-    printf("working 10\n");
+    
+    printf("Applying the non maximum suppresion..\n");
+    nonMaxSuppression(magnitude,direction,nms,w,h,c);
+
+    printf("Applying the double doubleThreshold..\n");
+    doubleThreshold(magnitude,nms,w,h,c,threshold*0.3,threshold);
+    
+    printf("Applying the hysteresis..\n");
+    hysteresis(img,w,h,c);
+
+    memcpy(img, nms, w * h * sizeof(unsigned char));
+
     free(magnitude);
     free(direction);
+    free(nms);
 }
 
 int main(void){
