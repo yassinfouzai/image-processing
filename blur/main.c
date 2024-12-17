@@ -151,13 +151,71 @@ void gaussianBlur(unsigned char *img, int w, int h, int c, int tension, int stre
     free(kernel);
 }
 
-
-void bilateralBlur(unsigned char *img, int w , int h, int c, int color, int space)
+void recursiveSmooth(unsigned char *img, int w, int h, int c, int alpha)
 {
+    int i,j,k;
+
+    float *tmp = (float*)malloc(w*h*c*sizeof(float));
+    if(!tmp)
+    {
+        printf("Failed to allocate memory for smoothing.\n");
+        return;
+    }
+
+    float a = expf(-alpha);
+    
+    for(i=0;i<h;i++)
+        for(k=0;k < (c == 4 ? 3 : c);k++){
+
+            for(j=0;j<w;j++){
+                int id = (i * w + j) * c + k;
+                int pid = (i * w + (j - 1)) * c + k;
+                if(j==0)
+                    tmp[id] = img[id];
+                else
+                    tmp[id] = a * tmp[id] + img[id];
+            }
+
+            
+            for(j=w-2;j>=0;j--){
+                int id = (i * w + j) * c + k;
+                int nid = (i * w + (j+1)) * c + k;
+                tmp[id] += a * tmp[nid]; 
+            }
+        }
+
+    for(j=0;j<w;j++)
+        for(k=0;k < (c == 4 ? 3 : c);k++){
+
+
+            for(i=0;i<h;i++){
+                int id = (i * w + j) * c + k;
+                int pid = ((i-1) * w + j) * c + k;
+                if(i==0)
+                    tmp[id] = img[id];
+                else
+                    tmp[id] = a * tmp[id] + img[id];
+            }
+
+            
+            for(i=h-2;i>=0;i--){
+                int id = (i * w + j) * c + k;
+                int nid = ((i+1) * w + j) * c + k;
+                tmp[id] += a * tmp[nid]; 
+            }
+        }
+    for(i=0;i<w*h*c;i++)
+        img[i] = (unsigned char)tmp[i];
+
+    free(tmp);
+        
 }
 
+void bilateralBlur(unsigned char *img, int w , int h, int c, int color, int space)
+{}
 int main(void){
     int w,h,channels,filter;
+    float alpha;
     char name[max],nname[max];
 
     int tension,space,color,strength;
@@ -174,7 +232,7 @@ int main(void){
     printf("Now loading your image with widht of %dpx and height of %dpx and channels %d\n",w,h,channels);
    
     printf("choose the dithering effect :\n");
-    printf("1)Box Blur\n2)Gaussian Blur\n3)Bilateral Blur\n");
+    printf("1)Box Blur\n2)Gaussian Blur\n3)Direche smoothing\n4)Bilateral Blur\n");
     scanf("%d",&filter);
     switch(filter){
         case 1:
@@ -199,7 +257,15 @@ int main(void){
             gaussianBlur(img,w,h,channels,tension,strength);
             printf("Gaussian blur completed.\n");
             break;
+
         case 3:
+            do{
+                printf("give the alpha for smoothing (0.01-5.0)\n");
+                scanf("%f",&alpha);
+            }while(alpha <= 0.0 || alpha > 5.0);
+            recursiveSmooth(img,w,h,channels,alpha);
+            break;
+        case 4:
             do{
             printf("Choose a kernel space : (space >= 2)\n");
             scanf("%d",&space);
@@ -208,7 +274,7 @@ int main(void){
             bilateralBlur(img,w,h,channels,color,space);
             printf("Gaussian blur completed.\n");
             break;
-        case 4:
+        case 5:
             testing(img,w,h,channels);
             break;
         default:
