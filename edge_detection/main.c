@@ -90,9 +90,9 @@ void doubleThreshold(float *m, unsigned char *img, int w, int h, int c, float tl
             int pID = (i * w + j) * c;
             int mID = i * w + j;
             int v;
-            if (m[mID] >= th)
+            if (img[pID] >= th)
                 v = 255;
-            else if (m[mID] >= tl)
+            else if (img[pID] >= tl)
                 v = 128;
             else 
                 v = 0;
@@ -261,59 +261,55 @@ void hysteresis(unsigned char *img, int w, int h, int c) {
         }
 }
 
-void nonMaxSuppression(float *magnitude, float *direction, unsigned char * nms, int w, int h, int c)
-{
-    int i,j;
-    float angle;
-    for (i = 1; i < h - 1; i++) {
-        for (j = 1; j < w - 1; j++) {
-            int mID = i * w + j;
+void nonMaxSuppression(float *magnitude, float *direction, unsigned char *nms, int w, int h, int c) {
+    int i, j;
+    float angle, mag1, mag2;
+    int x, y;
+
+    for (i = 0; i < h - 1; i++)
+        for (j = 0; j < w - 1; j++) {
             int pID = (i * w + j) * c;
+            angle = direction[i * w + j];
 
-            angle = direction[mID] * 180.0 / M_PI;
-            if (angle < 0) angle += 180;
+            //Normalize angle to 0-180
+            if (angle < 0) angle += M_PI;
+            if (angle >= M_PI) angle -= M_PI;
 
-            float m = magnitude[mID];
-            float n1 = 0, n2 = 0; //neighbor 1 & 2
-
-            if ((angle >= 0 && angle < 22.5) || (angle >= 157.5 && angle <= 180)) {
-                n1 = magnitude[mID - 1];
-                n2 = magnitude[mID + 1];
-            } else if (angle >= 22.5 && angle < 67.5) {
-                n1 = magnitude[mID - w - 1];
-                n2 = magnitude[mID + w + 1];
-            } else if (angle >= 67.5 && angle < 112.5) {
-                n1 = magnitude[mID - w];
-                n2 = magnitude[mID + w];
-            } else if (angle >= 112.5 && angle < 157.5) {
-                n1 = magnitude[mID - w + 1];  
-                n2 = magnitude[mID + w - 1];
-            }
-
-
-            if (m >= n1 && m >= n2) {
-                nms[pID] = (unsigned char)m;
-                nms[pID + 1] = (unsigned char)m;
-                nms[pID + 2] = (unsigned char)m;
-                if (c > 3) nms[pID + 3] = 255;
+            if ((angle >= 0 && angle < M_PI / 8) || (angle >= 7 * M_PI / 8 && angle < M_PI)) {
+                x = 1;
+                y = 0;
+            } else if (angle >= M_PI / 8 && angle < 3 * M_PI / 8) {
+                x = 1;
+                y = -1;
+            } else if (angle >= 3 * M_PI / 8 && angle < 5 * M_PI / 8) {
+                x = 0;
+                y = 1;
             } else {
-                nms[pID] = 0;
-                nms[pID + 1] = 0;
-                nms[pID + 2] = 0;
-                if (c > 3) nms[pID + 3] = 255;
+                x = -1;
+                y = -1;
             }
+
+            mag1 = magnitude[(i + y) * w + (j + x)];
+            mag2 = magnitude[(i - y) * w + (j - x)];
+
+            if (magnitude[i * w + j] >= mag1 && magnitude[i * w + j] >= mag2)
+                for (int k = 0; k < c; k++)
+                    nms[pID + k] = (unsigned char)magnitude[i * w + j];
+            else 
+                for (int k = 0; k < c; k++)
+                    nms[pID + k] = 0;
         }
-    }
 }
 
-void canny(unsigned char *img, int w, int h, int c, int tension, float strength, unsigned char threshold) 
+
+void canny(unsigned char *img, int w, int h, int c, int tension, float strength, unsigned char th, unsigned char tl) 
 {
     greyscaler(img,w,h,c);
     gaussianBlur(img,w,h,c,tension,strength);
 
     float *magnitude = (float *)malloc(w * h * sizeof(float));
     float *direction = (float *)malloc(w * h * sizeof(float));
-    unsigned char *nms = (unsigned char *)malloc(w * h * sizeof(unsigned char));
+    unsigned char *nms = (unsigned char *)malloc(w * h * c * sizeof(unsigned char));
     if (!magnitude || !direction || !nms) {
         printf("Failed to allocate memory.\n");
         free(magnitude);
@@ -329,12 +325,12 @@ void canny(unsigned char *img, int w, int h, int c, int tension, float strength,
     nonMaxSuppression(magnitude,direction,nms,w,h,c);
 
     printf("Applying the double doubleThreshold..\n");
-    doubleThreshold(magnitude,nms,w,h,c,threshold*0.3,threshold);
+    doubleThreshold(magnitude,nms,w,h,c,tl,th);
     
     printf("Applying the hysteresis..\n");
-    hysteresis(img,w,h,c);
+    hysteresis(nms,w,h,c);
 
-    memcpy(img, nms, w * h * sizeof(unsigned char));
+    memcpy(img, nms, w * h * c * sizeof(unsigned char));
 
     free(magnitude);
     free(direction);
@@ -345,7 +341,7 @@ int main(void){
     int w,h,channels,filter;
     char name[max],nname[max];
     
-    unsigned char threshold;
+    unsigned char threshold,threshold2;
     int tension,space,color;
     float strength;
     printf("give the name of the image (.png) : \n");
@@ -377,11 +373,15 @@ int main(void){
             }while(strength < 1.0 || strength > 5.0);
             
             do{
-                printf("give the threshold value (0-255):\n");
+                printf("give the high threshold value (0-255):\n");
                 scanf("%hhu",&threshold);
             }while(threshold < 0 || threshold > 255);
 
-            canny(img,w,h,channels,tension,strength,threshold); 
+            do{
+                printf("give the low threshold value (0-255):\n");
+                scanf("%hhu",&threshold2);
+            }while(threshold2 < 0 || threshold2 > threshold);
+            canny(img,w,h,channels,tension,strength,threshold,threshold2); 
             printf("Canny Edge Detection completed.\n");
             break; 
         default:
