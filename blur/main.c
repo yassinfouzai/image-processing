@@ -151,61 +151,59 @@ void gaussianBlur(unsigned char *img, int w, int h, int c, int tension, int stre
     free(kernel);
 }
 
-void recursiveSmooth(unsigned char *img, int w, int h, int c, int alpha)
+void recursiveSmooth(unsigned char *img, int w, int h, int c, float alpha)
 {
     int i,j,k;
-
     float *tmp = (float*)malloc(w*h*c*sizeof(float));
     if(!tmp)
     {
         printf("Failed to allocate memory for smoothing.\n");
         return;
     }
-
-    float a = expf(-alpha);
     
-    for(i=0;i<h;i++)
-        for(k=0;k < (c == 4 ? 3 : c);k++){
 
-            for(j=0;j<w;j++){
-                int id = (i * w + j) * c + k;
-                int pid = (i * w + (j - 1)) * c + k;
-                if(j==0)
-                    tmp[id] = img[id];
-                else
-                    tmp[id] = a * tmp[id] + img[id];
+    printf("working\n");
+    float b1 = exp(-alpha);
+    float b2 = exp(-2 * alpha);
+    float a0 = (1-b1)*(1-b1);
+    
+    for(k=0;k<c;k++){
+        
+        for (i = 0; i < h; i++) {
+            // Forward pass
+            tmp[(i * w + 0) * c + k] = a0 * img[(i * w + 0) * c + k];
+            for (j = 1; j < w; j++) {
+                tmp[(i * w + j) * c + k] =
+                    a0 * img[(i * w + j) * c + k] +
+                    b1 * tmp[(i * w + (j - 1)) * c + k];
             }
 
-            
-            for(j=w-2;j>=0;j--){
-                int id = (i * w + j) * c + k;
-                int nid = (i * w + (j+1)) * c + k;
-                tmp[id] += a * tmp[nid]; 
+            // Backward pass
+            for (j = w - 2; j >= 0; j--) {
+                tmp[(i * w + j) * c + k] +=
+                    b1 * tmp[(i * w + (j + 1)) * c + k];
+            }
+        }
+
+        printf("working..\n");
+        for (j = 0; j < w; j++) {
+            // Forward pass
+            img[(0 * w + j) * c + k] = a0 * tmp[(0 * w + j) * c + k];
+            for (i = 1; i < h; i++) {
+                img[(i * w + j) * c + k] =
+                    a0 * tmp[(i * w + j) * c + k] +
+                    b1 * img[((i - 1) * w + j) * c + k];
+            }
+
+            // Backward pass
+            for (i = h - 2; i >= 0; i--) {
+                img[(i * w + j) * c + k] +=
+                    b1 * img[((i + 1) * w + j) * c + k];
             }
         }
 
-    for(j=0;j<w;j++)
-        for(k=0;k < (c == 4 ? 3 : c);k++){
-
-
-            for(i=0;i<h;i++){
-                int id = (i * w + j) * c + k;
-                int pid = ((i-1) * w + j) * c + k;
-                if(i==0)
-                    tmp[id] = img[id];
-                else
-                    tmp[id] = a * tmp[id] + img[id];
-            }
-
-            
-            for(i=h-2;i>=0;i--){
-                int id = (i * w + j) * c + k;
-                int nid = ((i+1) * w + j) * c + k;
-                tmp[id] += a * tmp[nid]; 
-            }
-        }
-    for(i=0;i<w*h*c;i++)
-        img[i] = (unsigned char)tmp[i];
+        
+    }
 
     free(tmp);
         
