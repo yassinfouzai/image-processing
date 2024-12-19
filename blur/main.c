@@ -12,6 +12,39 @@
 
 
 
+
+void swap(unsigned char* a, unsigned char* b) {
+    unsigned char t = *a;
+    *a = *b;
+    *b = t;
+}
+
+int partition(unsigned char *t, int low, int high) {
+    
+    int pivot = t[high];
+    
+    int i = low-1,j;
+
+    for (j=low;j<=high-1;j++)
+        if (t[j] < pivot) {
+            i++;
+            swap(&t[i],&t[j]);
+        }
+    
+    swap(&t[i+1],&t[high]);  
+    return i + 1;
+}
+
+void quickSort(unsigned char *t, int low, int high) {
+    if (low < high) {   
+        
+        int pivot = partition(t,low,high);
+
+        quickSort(t,low,pivot-1);
+        quickSort(t,pivot+1,high);
+    }
+}
+
 void pixelChannels(unsigned char * pixels){
     int n;
     printf("give the pixel number :\n");
@@ -209,8 +242,45 @@ void recursiveSmooth(unsigned char *img, int w, int h, int c, float alpha)
         
 }
 
-void bilateralBlur(unsigned char *img, int w , int h, int c, int color, int space)
-{}
+
+
+void medianBlur(unsigned char *img, int w , int h, int c, int tension)
+{
+    int i,j,k;
+    int ks = 3*tension+1;
+    int off = ks/2;
+    unsigned char *kernel = (unsigned char *)malloc(ks * ks);
+    unsigned char *tmp = (unsigned char *)malloc(w*h*c);
+    if (!kernel || !tmp) {
+        printf("Failed to allocate memory for the median filter\n");
+        return;
+    }
+    
+    for(k=0;k<c;k++)
+        for(i=0;i<h;i++)
+            for(j=0;j<w;j++){
+                int count = 0;
+
+
+                for(int ki=-off;ki<off;ki++)
+                    for(int kj=-off;kj<off;kj++){
+                        int y = i + ki;
+                        int x = j + kj;
+
+                        if (y >= 0 && y < h && x >= 0 && x < w) {
+                            kernel[count++] = img[(y * w + x) * c + k];
+                        }
+                    }
+                quickSort(kernel,0,count);
+
+                tmp[(i*w+j) * c + k] = kernel[count/2];
+            }
+    memcpy(img,tmp,w*h*c);    
+    free(tmp);
+    free(kernel);
+
+
+}
 int main(void){
     int w,h,channels,filter;
     float alpha;
@@ -230,7 +300,7 @@ int main(void){
     printf("Now loading your image with widht of %dpx and height of %dpx and channels %d\n",w,h,channels);
    
     printf("choose the dithering effect :\n");
-    printf("1)Box Blur\n2)Gaussian Blur\n3)Direche smoothing\n4)Bilateral Blur\n");
+    printf("1)Box Blur\n2)Gaussian Blur\n3)Direche smoothing\n4)Median Blur\n");
     scanf("%d",&filter);
     switch(filter){
         case 1:
@@ -265,12 +335,12 @@ int main(void){
             break;
         case 4:
             do{
-            printf("Choose a kernel space : (space >= 2)\n");
-            scanf("%d",&space);
-            }while(space < 2);
+            printf("give the tension value (1-5) :\n");
+            scanf("%d",&tension);
+            }while(tension < 1 || tension > 5);
 
-            bilateralBlur(img,w,h,channels,color,space);
-            printf("Gaussian blur completed.\n");
+            medianBlur(img,w,h,channels,tension);
+            printf("Median blur completed.\n");
             break;
         case 5:
             testing(img,w,h,channels);
