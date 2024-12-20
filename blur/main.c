@@ -10,15 +10,16 @@
 
 #define max 500
 
-
-
-
 void swap(unsigned char* a, unsigned char* b) {
     unsigned char t = *a;
     *a = *b;
     *b = t;
 }
-
+unsigned char clamp(int value) {
+    if (value < 0) return 0;
+    if (value > 255) return 255;
+    return (unsigned char)value;
+}
 int partition(unsigned char *t, int low, int high) {
     
     int pivot = t[high];
@@ -156,19 +157,41 @@ void genGaussian(float *kernel, int size, int sigma)
     float sum = 0.0;
     
 
-    for (int i = 0; i < size; i++) {
-        for (int j = 0; j < size; j++) {
+    for (i=0;i<size;i++)
+        for (j=0;j<size;j++) {
             int x = i - off;
             int y = j - off;
             kernel[i * size + j] = exp(-(float)(x * x + y * y) / (2.0f * sigma * sigma));
             sum += kernel[i * size + j];
         }
-    }
 
     for(i=0;i<size*size;i++)
         kernel[i] /= sum;
 
 }
+
+
+void genSharpen(float *kernel, int size, float strength)
+{
+    int i,j;
+    int off = size/2;
+    float cv = strength + (size*size - 1);
+
+    for(i=0;i<size;i++)
+        for(j=0;j<size;j++) 
+            kernel[i * size + j] = 0;
+
+    for (i=0;i<off+1; i++)
+        for (j=off-i;j<=off+i;j++) {
+            kernel[i*size+j] = -1;
+            kernel[(size-i-1)*size+j] = -1;
+        }
+
+    kernel[off * size + off] = cv;
+
+}
+
+
 void gaussianBlur(unsigned char *img, int w, int h, int c, int tension, int strength)
 {
     int ks = 2*tension + 1;
@@ -281,12 +304,52 @@ void medianBlur(unsigned char *img, int w , int h, int c, int tension)
 
 
 }
+
+void sharpen(unsigned char *img, int w, int h, int c, int tension, float strength)
+{
+    int i,j,k;
+    int ks = 2*tension+1;
+    int off = ks/2;
+
+    float *kernel = (float *)malloc(ks * ks * sizeof(float));
+    unsigned char *tmp = (unsigned char *)malloc(w*h*c);
+    if (!kernel || !tmp) {
+        printf("Failed to allocate memory for the median filter\n");
+        return;
+    }
+    genSharpen(kernel,ks,strength);
+
+    for(k=0;k<c;k++)
+        for(i=0;i<h;i++)
+            for(j=0;j<w;j++){
+                int sum = 0;                
+
+                for(int ki=-off;ki<=off;ki++)
+                    for(int kj=-off;kj<=off;kj++){
+                        int y = ki + i;
+                        int x = kj + j;
+                        if (x >= 0 && x < w && y >= 0 && y < h){ 
+                        int pID = (y * w + x) * c + k;
+                        sum += img[pID] * kernel[(ki + off) * ks + (kj + off)];
+                        }
+                    }
+
+                int index = (i * w + j) * c + k;
+                tmp[index] = clamp(sum);
+            }
+
+    memcpy(img,tmp,w*h*c);
+    free(tmp);
+    free(kernel);
+}
+
 int main(void){
     int w,h,channels,filter;
     float alpha;
     char name[max],nname[max];
 
-    int tension,space,color,strength;
+    int tension,strength;
+    float fstrength;
     printf("give the name of the image (.png) : \n");
     scanf("%s",name);
     
@@ -300,7 +363,7 @@ int main(void){
     printf("Now loading your image with widht of %dpx and height of %dpx and channels %d\n",w,h,channels);
    
     printf("choose the dithering effect :\n");
-    printf("1)Box Blur\n2)Gaussian Blur\n3)Direche smoothing\n4)Median Blur\n");
+    printf("1)Box Blur\n2)Gaussian Blur\n3)Direche smoothing\n4)Median Blur\n5)Sharpenning\n");
     scanf("%d",&filter);
     switch(filter){
         case 1:
@@ -341,8 +404,20 @@ int main(void){
 
             medianBlur(img,w,h,channels,tension);
             printf("Median blur completed.\n");
-            break;
+            break;            
         case 5:
+            do{
+            printf("give the tension value (1-5) :\n");
+            scanf("%d",&tension);
+            }while(tension < 1 || tension > 5);
+            do{
+            printf("give the strength value(-5.0-5.0) :\n");
+            scanf("%f",&fstrength);
+            }while(fstrength < -5.0 || fstrength > 5.0);
+            sharpen(img,w,h,channels,tension,fstrength);
+            printf("Sharpenning completed.\n");
+            break;
+        case 6:
             testing(img,w,h,channels);
             break;
         default:
