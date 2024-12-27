@@ -20,8 +20,6 @@
 									  image.name, image.width, image.height,		 \ 
 									  image.channels);
 
-//#define DOWNSCALE_FACTOR 10
-//#define F DOWNSCALE_FACTOR
 #define F 10
 #define RGB_MAX 255
 
